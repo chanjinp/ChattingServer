@@ -61,17 +61,19 @@ namespace ChattingServer
 
         public void Run()
         {
-            while(isOpen)
+            while (isOpen)
             {
-                Task task = new Task(AcceptClient);
-                task.Start();
+                Task<Socket> task = Task.Run(() => AcceptClient());
+                Socket clientSocket = task.Result;
 
-                Task.WhenAll(ReceiveMessage(), BroadCastMessage());
+                Task.Run(() => ReceiveMessage(clientSocket));
+
+                Task.Run(() => BroadCastMessage());
             }
             
         }
 
-        public void AcceptClient()
+        public Socket AcceptClient()
         {
             Socket client = null;
             try
@@ -81,7 +83,7 @@ namespace ChattingServer
                     tryAccept++;
                     Console.WriteLine("[클라이언트 대기중 ...]");
                     client = m_Socket.Accept(); //서버 소켓에서 수신
-
+                    Console.WriteLine("[클라이언트 수신 완료...]");
                     c_Sockets.Add(client); //리스트에 추가
                 }
             }
@@ -91,6 +93,7 @@ namespace ChattingServer
                     Console.WriteLine("[Accept Error]: " + ex.Message);
                 }
             }
+            return client;
 
         }
 
@@ -111,12 +114,11 @@ namespace ChattingServer
             return target;
         }
 
-        public async Task ReceiveMessage() // TODO ClientSocket으로 Receive하는 걸로 수정
+        public async Task ReceiveMessage(Socket client)
         {
             await Task.Run(() =>
             {
-                int receive = m_Socket.Receive(m_Buffer);
-                Console.WriteLine("[ReceiveBytes]: " + receive);
+                int receive = client.Receive(m_Buffer);
                 if (receive > 0)
                 {
                     string msg = Encoding.UTF8.GetString(m_Buffer, 0, receive);
