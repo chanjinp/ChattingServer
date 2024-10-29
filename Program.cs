@@ -11,11 +11,7 @@
 
             //server.Run();
 
-            Task task = new Task(server.Run);
-            task.Start();
-
-
-            await task;
+            await Task.Run(() => server.Run());
         }
     }
 }

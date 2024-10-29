@@ -70,7 +70,7 @@ namespace ChattingServer
 
                 Task.Run(() => BroadCastMessage());
             }
-            
+
         }
 
         public Socket AcceptClient()
@@ -89,9 +89,9 @@ namespace ChattingServer
             }
             catch (Exception ex)
             {
-                {
-                    Console.WriteLine("[Accept Error]: " + ex.Message);
-                }
+
+                Console.WriteLine("[Accept Error]: " + ex.Message);
+
             }
             return client;
 
@@ -116,34 +116,41 @@ namespace ChattingServer
 
         public async Task ReceiveMessage(Socket client)
         {
-            await Task.Run(() =>
+            while (isOpen)
             {
-                int receive = client.Receive(m_Buffer);
-                if (receive > 0)
+                await Task.Run(() =>
                 {
-                    string msg = Encoding.UTF8.GetString(m_Buffer, 0, receive);
-                    Console.WriteLine("[ClientMsg]: " + msg);
-                }
-            });
+                    int receive = client.Receive(m_Buffer);
+                    if (receive > 0)
+                    {
+                        string msg = Encoding.UTF8.GetString(m_Buffer, 0, receive);
+                        Console.WriteLine("[ClientMsg]: " + msg);
+                    }
+                });
+            }
         }
 
         public async Task BroadCastMessage()
         {
-            string msg = await Console.In.ReadLineAsync();
-            await Task.Run(() => {
-                foreach (Socket socket in c_Sockets)
+            while (isOpen)
+            {
+                string msg = await Console.In.ReadLineAsync();
+                await Task.Run(() =>
                 {
-                    Send(msg, socket);
-                    Console.WriteLine("[Send Message]");
-                }
-            });
-            
+                    foreach (Socket socket in c_Sockets)
+                    {
+                        Send(msg, socket);
+                        Console.WriteLine("[Send Message]");
+                    }
+                });
+            }
+
         }
         public void ClientToMessage(Socket socket)
         {
 
         }
-        
+
         public void Send(string msg, Socket client)
         {
             byte[] bytes = Encoding.UTF8.GetBytes(msg);
