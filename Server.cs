@@ -63,14 +63,21 @@ namespace ChattingServer
         {
             while (isOpen)
             {
-                Task<Socket> task = Task.Run(() => AcceptClient());
-                Socket clientSocket = task.Result;
+                Task<Socket> task = Task.Run(() => AcceptClient()); //Thread를 할당 받아서 Accept 완료 후
+                Socket clientSocket = task.Result; // Accept한 client를 활용 -> 할당된 Thread는 회수
 
-                Task.Run(() => ReceiveMessage(clientSocket));
+                while (clientSocket.Connected)
+                {
+                    Task.Run(() => ReceiveMessage(clientSocket)); //연결된 클라이언트를 활용
+                    //TODO 소켓이 수신한 메시지에 따라 닫히더라도 브로드 캐스트가 진행됨 -> 문제 해결 해야함
+                    Task.Run(() => BroadCastMessage());
+                }
 
-                Task.Run(() => BroadCastMessage());
+                Console.WriteLine("Socket closed");
             }
 
+            Console.WriteLine("================= [Server Down] =================");
+            Close();
         }
 
         public Socket AcceptClient()
@@ -97,7 +104,7 @@ namespace ChattingServer
 
         }
 
-        public Socket findBySocketIP(string ip)
+        public Socket FindBySocketIP(string ip)
         {
             Socket target = null;
 
@@ -114,36 +121,57 @@ namespace ChattingServer
             return target;
         }
 
+        public int FindSocketIndex(string ip)
+        {
+            for (int i = 0; i < c_Sockets.Count; i++)
+            {
+                Socket socket = c_Sockets[i];
+
+                string socketIP = socket.RemoteEndPoint.ToString();
+
+                if (socketIP != null && ip == socketIP)
+                {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
         public async Task ReceiveMessage(Socket client)
         {
-            while (isOpen)
+
+            await Task.Run(() =>
             {
-                await Task.Run(() =>
+                int receive = client.Receive(m_Buffer);
+                if (receive > 0)
                 {
-                    int receive = client.Receive(m_Buffer);
-                    if (receive > 0)
+                    string msg = Encoding.UTF8.GetString(m_Buffer, 0, receive);
+                    Console.WriteLine("[ClientMsg]: " + msg);
+
+                    if (msg.Equals("Exit"))
                     {
-                        string msg = Encoding.UTF8.GetString(m_Buffer, 0, receive);
-                        Console.WriteLine("[ClientMsg]: " + msg);
+                        c_Sockets.Remove(client); //관리 리스트에서 삭제
+                        Console.WriteLine("[Client {0}: Close]", client.RemoteEndPoint.ToString());
+                        client.Close();//클라이언트 소켓 종료
+                        Console.WriteLine("[End ReceiveMessage]");
                     }
-                });
-            }
+                }
+            });
+
         }
 
         public async Task BroadCastMessage()
         {
-            while (isOpen)
+            string msg = await Console.In.ReadLineAsync();
+            await Task.Run(() =>
             {
-                string msg = await Console.In.ReadLineAsync();
-                await Task.Run(() =>
+                foreach (Socket socket in c_Sockets)
                 {
-                    foreach (Socket socket in c_Sockets)
-                    {
-                        Send(msg, socket);
-                        Console.WriteLine("[Send Message]");
-                    }
-                });
-            }
+                    Send(msg, socket);
+                    Console.WriteLine("[Send Message]");
+                }
+            });
+
 
         }
         public void ClientToMessage(Socket socket)
